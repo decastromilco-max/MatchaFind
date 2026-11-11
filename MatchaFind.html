@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Matcha Manila</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f3f7ee;--card:#fff;--ink:#2b3a2a;--mute:#6b7c68;--accent:#6f9a4f;--accent2:#e8f1dc;--line:#dbe6cf;--heart:#d9576b;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#161d15;--card:#1f2a1e;--ink:#e7f0e0;--mute:#9bb094;--accent:#8fbf6a;--accent2:#2a3a27;--line:#33442f;--heart:#ef7a8d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#161d15;--card:#1f2a1e;--ink:#e7f0e0;--mute:#9bb094;--accent:#8fbf6a;--accent2:#2a3a27;--line:#33442f;--heart:#ef7a8d;color-scheme:dark}
+*,*::before,*::after{box-sizing:inherit}
+html,body{margin:0}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;max-width:560px;margin:0 auto;padding:16px 16px 40px}
+header{text-align:center;padding:8px 0 14px}
+h1{font-family:Georgia,"Times New Roman",serif;font-size:28px;margin:0 0 6px}
+.note{background:var(--accent2);border:1px solid var(--line);border-radius:14px;padding:12px 14px;font-size:14px;line-height:1.45;margin:10px 0 0}
+.row{display:flex;gap:8px;overflow-x:auto;padding:4px 0 10px;scrollbar-width:none}
+.row::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:999px;padding:8px 14px;font-size:14px;cursor:pointer}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.tabs{display:flex;gap:6px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:4px;margin-bottom:12px}
+.tabs button{flex:1;border:0;background:none;color:var(--mute);padding:9px 4px;border-radius:9px;font-size:14px;cursor:pointer}
+.tabs button.on{background:var(--accent2);color:var(--ink);font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-bottom:10px}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.name{font-weight:650;font-size:17px}
+.city{color:var(--mute);font-size:13px;margin-top:2px}
+.blurb{font-size:14px;margin:8px 0 0;line-height:1.4}
+.acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.btn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:10px;padding:8px 12px;font-size:13px;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.on{background:var(--accent2);border-color:var(--accent)}
+.fav.on{color:var(--heart);border-color:var(--heart)}
+.del{color:var(--mute);margin-left:auto}
+.empty{text-align:center;color:var(--mute);padding:28px 8px;font-size:14px}
+.add{width:100%;border:0;background:var(--accent);color:#fff;border-radius:14px;padding:14px;font-size:16px;cursor:pointer;margin-top:6px}
+.form{display:none;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;margin-top:10px}
+.form.show{display:block}
+input,select,textarea{width:100%;font:inherit;font-size:16px;background:var(--bg);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:8px}
+small{color:var(--mute)}
+</style>
+</head>
+<body>
+<header>
+<h1>🍵 Matcha Manila</h1>
+<div class="note" id="note"></div>
+</header>
+
+<div class="row" id="cities"></div>
+<div class="tabs" id="tabs">
+<button data-t="all" class="on">All</button>
+<button data-t="want">Want to try</button>
+<button data-t="fav">Favorites</button>
+</div>
+<div id="list"></div>
+
+<button class="add" id="toggleForm">+ Add a matcha bar</button>
+<div class="form" id="form">
+<input id="fName" placeholder="Bar name" maxlength="60">
+<select id="fCity"></select>
+<input id="fLoc" placeholder="Type the location:" style="display:none" maxlength="40">
+<textarea id="fNote" rows="2" placeholder="Why do you want to try it? (optional)" maxlength="160"></textarea>
+<button class="add" id="save">Save</button>
+</div>
+<p class="empty"><small>Tip: in your browser menu, tap “Add to Home Screen” to keep this like an app.</small></p>
+
+<script>
+// ===== Edit these two things to personalize =====
+var NOTE = "Made with love, just for you. Every cup we try together is my favorite part. Pick a spot, and let’s go. 💚";
+var CITIES = ["Makati","BGC","Quezon City","Manila","Marikina","Pasig","Mandaluyong","Other"];
+// ================================================
+
+var SEED = [
+ {id:"s1",name:"Shizu Matcha Bar",city:"Quezon City",note:""}
+];
+
+var store = {custom:[],fav:{},want:{},removed:{}};
+try{var raw=localStorage.getItem("matcha-v1");if(raw){store=Object.assign(store,JSON.parse(raw))}}catch(e){}
+function persist(){try{localStorage.setItem("matcha-v1",JSON.stringify(store))}catch(e){}}
+
+var city="All",tab="all",pendingDel=null;
+document.getElementById("note").textContent=NOTE;
+var fCity=document.getElementById("fCity");
+fCity.onchange=function(){document.getElementById("fLoc").style.display=fCity.value==="Other"?"block":"none"};
+CITIES.forEach(function(c){var o=document.createElement("option");o.value=c;o.textContent=c;fCity.appendChild(o)});
+
+function all(){return SEED.filter(function(b){return !store.removed[b.id]}).concat(store.custom)}
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+
+function drawCities(){
+ var set=["All"];all().forEach(function(b){if(set.indexOf(b.city)<0)set.push(b.city)});if(set.indexOf(city)<0)city="All";
+ document.getElementById("cities").innerHTML=set.map(function(c){return '<button class="chip'+(c===city?' on':'')+'" data-c="'+esc(c)+'">'+esc(c)+'</button>'}).join("");
+}
+function draw(){
+ drawCities();
+ var items=all().filter(function(b){
+  if(city!=="All"&&b.city!==city)return false;
+  if(tab==="fav")return store.fav[b.id];
+  if(tab==="want")return store.want[b.id];
+  return true;
+ });
+ var el=document.getElementById("list");
+ if(!items.length){el.innerHTML='<div class="empty">Nothing here yet. Add a bar or tap ♡ on one you love.</div>';return}
+ el.innerHTML=items.map(function(b){
+  var q=encodeURIComponent(b.name+" "+(b.city==="Other"?"":b.city+" ")+"Metro Manila");
+  return '<div class="card"><div class="top"><div><div class="name">'+esc(b.name)+'</div><div class="city">📍 '+esc(b.city)+'</div></div></div>'+
+  (b.note?'<p class="blurb">'+esc(b.note)+'</p>':'')+
+  '<div class="acts">'+
+  '<button class="btn fav'+(store.fav[b.id]?' on':'')+'" data-a="fav" data-id="'+b.id+'">'+(store.fav[b.id]?'♥ Favorite':'♡ Favorite')+'</button>'+
+  '<button class="btn'+(store.want[b.id]?' on':'')+'" data-a="want" data-id="'+b.id+'">'+(store.want[b.id]?'✓ Want to try':'+ Want to try')+'</button>'+
+  '<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query='+q+'">🗺️ Map</a>'+
+  '<button class="btn del" data-a="del" data-id="'+b.id+'">'+(pendingDel===b.id?'Tap again to remove':'Remove')+'</button></div></div>';
+ }).join("");
+}
+
+document.getElementById("cities").onclick=function(e){var c=e.target.dataset.c;if(c){city=c;draw()}};
+document.getElementById("tabs").onclick=function(e){var t=e.target.dataset.t;if(!t)return;tab=t;
+ Array.prototype.forEach.call(this.children,function(b){b.classList.toggle("on",b.dataset.t===t)});draw()};
+document.getElementById("list").onclick=function(e){
+ var a=e.target.dataset.a,id=e.target.dataset.id;if(!a)return;
+ if(a!=="del")pendingDel=null;
+ if(a==="fav"||a==="want"){store[a][id]=!store[a][id];if(!store[a][id])delete store[a][id]}
+ if(a==="del"){
+  if(pendingDel!==id){pendingDel=id;draw();return}
+  pendingDel=null;
+  if(id.indexOf("s")===0&&SEED.some(function(b){return b.id===id}))store.removed[id]=true;
+  else store.custom=store.custom.filter(function(b){return b.id!==id});
+  delete store.fav[id];delete store.want[id];
+ }
+ persist();draw();
+};
+document.getElementById("toggleForm").onclick=function(){document.getElementById("form").classList.toggle("show")};
+document.getElementById("save").onclick=function(){
+ var n=document.getElementById("fName").value.trim();if(!n)return;
+ var c=fCity.value;
+ if(c==="Other"){c=document.getElementById("fLoc").value.trim();if(!c)return}
+ store.custom.push({id:"c"+Date.now(),name:n,city:c,note:document.getElementById("fNote").value.trim()});
+ document.getElementById("fLoc").value="";
+ document.getElementById("fName").value="";document.getElementById("fNote").value="";
+ document.getElementById("form").classList.remove("show");
+ persist();draw();
+};
+draw();
+</script>
+</body>
+</html>
